@@ -1,0 +1,18 @@
+apiVersion: v2
+name: memorybank
+description: A Helm chart for MemoryBank multi-tenant deployment
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - ai
+  - memory
+  - llm
+  - vector-database
+  - multi-tenant
+home: https://github.com/memorybank/memorybank-python
+sources:
+  - https://github.com/memorybank/memorybank-python
+maintainers:
+  - name: MemoryBank Team
+    email: support@memorybank.dev

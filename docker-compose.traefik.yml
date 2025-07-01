@@ -1,0 +1,146 @@
+# Traefik reverse proxy configuration for multi-tenant MemoryBank
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: memorybank-traefik
+    command:
+      # API and dashboard configuration
+      - --api.dashboard=true
+      - --api.insecure=true  # Set to false in production
+      
+      # Entry points
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      
+      # Docker provider
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=memorybank_network
+      
+      # Certificate resolvers (Let's Encrypt)
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.email=admin@yourdomain.com
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      
+      # HTTP to HTTPS redirect
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      
+      # Logging
+      - --log.level=INFO
+      - --accesslog=true
+    
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik dashboard
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/letsencrypt:/letsencrypt
+      - ./traefik/logs:/var/log/traefik
+    
+    labels:
+      # Dashboard
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.yourdomain.com`)"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      
+      # Auth middleware for dashboard (optional)
+      # - "traefik.http.routers.dashboard.middlewares=auth"
+      # - "traefik.http.middlewares.auth.basicauth.users=admin:$$2y$$10$$..."
+    
+    restart: unless-stopped
+    networks:
+      - memorybank_network
+
+  # Example tenant service (for reference)
+  # This would be automatically created by the deployment script
+  memorybank-example:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: memorybank-example
+    environment:
+      - API_KEY=example_api_key
+      - TENANT_ID=example
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CHROMA_DB_PATH=/app/data
+    volumes:
+      - ./deployments/example/data:/app/data/example
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.example.rule=Host(`example.yourdomain.com`)"
+      - "traefik.http.routers.example.tls=true"
+      - "traefik.http.routers.example.tls.certresolver=letsencrypt"
+      - "traefik.http.services.example.loadbalancer.server.port=8000"
+      
+      # Rate limiting middleware
+      - "traefik.http.routers.example.middlewares=ratelimit"
+      - "traefik.http.middlewares.ratelimit.ratelimit.burst=100"
+      - "traefik.http.middlewares.ratelimit.ratelimit.average=10"
+    
+    restart: unless-stopped
+    networks:
+      - memorybank_network
+    profiles:
+      - example  # Only start with --profile example
+
+  # Monitoring stack (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: memorybank-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.yourdomain.com`)"
+      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    restart: unless-stopped
+    networks:
+      - memorybank_network
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: memorybank-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.yourdomain.com`)"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    restart: unless-stopped
+    networks:
+      - memorybank_network
+    profiles:
+      - monitoring
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  memorybank_network:
+    external: true

@@ -1,0 +1,134 @@
+# Default values for memorybank
+replicaCount: 1
+
+image:
+  repository: memorybank/memorybank
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Multi-tenancy configuration
+multiTenant:
+  enabled: true
+  defaultTenant: "default"
+
+# Environment variables
+env:
+  LLM_PROVIDER: "claude"
+  EMBEDDING_PROVIDER: "openai"
+  FORGETTING_INTERVAL_HOURS: "24"
+  MAINTENANCE_INTERVAL_HOURS: "168"
+  FORGETTING_THRESHOLD: "0.1"
+
+# Secrets (API keys)
+secrets:
+  OPENAI_API_KEY: ""
+  ANTHROPIC_API_KEY: ""
+  GOOGLE_API_KEY: ""
+  API_KEY: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 2000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: memorybank.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Persistent storage for vector databases
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  annotations: {}
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Health checks
+healthCheck:
+  enabled: true
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Tenant-specific configurations
+tenants: []
+  # Example tenant configuration:
+  # - id: "customer1"
+  #   apiKey: "secret-key-123"
+  #   domain: "customer1.memorybank.com"
+  #   resources:
+  #     limits:
+  #       cpu: 1000m
+  #       memory: 1Gi
+  #   persistence:
+  #     size: 20Gi

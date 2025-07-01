@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  memorybank:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - API_KEY=${API_KEY:-development_key}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-claude}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - CHROMA_DB_PATH=/app/data/${TENANT_ID:-default}/memory_db
+      - TENANT_ID=${TENANT_ID:-default}
+      - FORGETTING_INTERVAL_HOURS=${FORGETTING_INTERVAL_HOURS:-24}
+      - MAINTENANCE_INTERVAL_HOURS=${MAINTENANCE_INTERVAL_HOURS:-168}
+      - FORGETTING_THRESHOLD=${FORGETTING_THRESHOLD:-0.1}
+    volumes:
+      - ./data/${TENANT_ID:-default}:/app/data/${TENANT_ID:-default}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Reverse proxy for subdomain routing
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - memorybank
+    restart: unless-stopped
+
+volumes:
+  memorybank_data:
+    driver: local

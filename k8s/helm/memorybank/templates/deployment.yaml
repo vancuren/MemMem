@@ -1,0 +1,204 @@
+{{- if .Values.multiTenant.enabled }}
+{{- range .Values.tenants }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "memorybank.fullname" $ }}-{{ .id }}
+  labels:
+    {{- include "memorybank.labels" $ | nindent 4 }}
+    tenant-id: {{ .id }}
+spec:
+  {{- if not $.Values.autoscaling.enabled }}
+  replicas: {{ $.Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "memorybank.selectorLabels" $ | nindent 6 }}
+      tenant-id: {{ .id }}
+  template:
+    metadata:
+      {{- with $.Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "memorybank.selectorLabels" $ | nindent 8 }}
+        tenant-id: {{ .id }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "memorybank.serviceAccountName" $ }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $.Chart.Name }}
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          env:
+            - name: TENANT_ID
+              value: {{ .id | quote }}
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "memorybank.fullname" $ }}-{{ .id }}-secrets
+                  key: API_KEY
+            - name: CHROMA_DB_PATH
+              value: "/app/data"
+            {{- range $key, $value := $.Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range $key, $value := $.Values.secrets }}
+            {{- if $value }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "memorybank.fullname" $ }}-secrets
+                  key: {{ $key }}
+            {{- end }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          {{- if $.Values.healthCheck.enabled }}
+          livenessProbe:
+            {{- toYaml $.Values.healthCheck.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $.Values.healthCheck.readinessProbe | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- if .resources }}
+            {{- toYaml .resources | nindent 12 }}
+            {{- else }}
+            {{- toYaml $.Values.resources | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+              subPath: {{ .id }}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if $.Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "memorybank.fullname" $ }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- else }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "memorybank.fullname" . }}
+  labels:
+    {{- include "memorybank.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "memorybank.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "memorybank.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "memorybank.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: TENANT_ID
+              value: {{ .Values.multiTenant.defaultTenant | quote }}
+            - name: CHROMA_DB_PATH
+              value: "/app/data"
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range $key, $value := .Values.secrets }}
+            {{- if $value }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "memorybank.fullname" . }}-secrets
+                  key: {{ $key }}
+            {{- end }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          {{- if .Values.healthCheck.enabled }}
+          livenessProbe:
+            {{- toYaml .Values.healthCheck.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.healthCheck.readinessProbe | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "memorybank.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

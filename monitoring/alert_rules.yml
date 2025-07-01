@@ -1,0 +1,52 @@
+groups:
+- name: memorybank_alerts
+  rules:
+  # High error rate
+  - alert: HighErrorRate
+    expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High error rate detected for {{ $labels.instance }}"
+      description: "Error rate is {{ $value }} errors per second for tenant {{ $labels.tenant_id }}"
+
+  # Memory usage too high
+  - alert: HighMemoryUsage
+    expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.9
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High memory usage for {{ $labels.instance }}"
+      description: "Memory usage is {{ $value | humanizePercentage }} for tenant {{ $labels.tenant_id }}"
+
+  # Container down
+  - alert: ContainerDown
+    expr: up == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Container {{ $labels.instance }} is down"
+      description: "MemoryBank instance for tenant {{ $labels.tenant_id }} has been down for more than 1 minute"
+
+  # High API latency
+  - alert: HighAPILatency
+    expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High API latency for {{ $labels.instance }}"
+      description: "95th percentile latency is {{ $value }}s for tenant {{ $labels.tenant_id }}"
+
+  # Disk space low
+  - alert: DiskSpaceLow
+    expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Low disk space on {{ $labels.instance }}"
+      description: "Disk space is {{ $value | humanizePercentage }} available"
