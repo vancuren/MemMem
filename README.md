@@ -1,6 +1,37 @@
-# MemoryBank API - Long-Term Memory System
+# MemoryBank SDK - Long-Term Memory System
 
-A MemoryBank-inspired external long-term memory system for conversational AI agents, built with FastAPI and featuring intelligent retrieval, automatic forgetting, and multi-LLM support.
+A MemoryBank-inspired external long-term memory system for conversational AI agents. This repository contains both a FastAPI server and a Python SDK for easy integration with your applications.
+
+## Installation
+
+### Install from PyPI (recommended)
+```bash
+pip install memorybank
+```
+
+### Install with optional dependencies
+```bash
+# For local vector storage
+pip install memorybank[local]
+
+# For LLM integrations
+pip install memorybank[llm]
+
+# For running the server
+pip install memorybank[server]
+
+# For CLI tools
+pip install memorybank[cli]
+
+# Install everything
+pip install memorybank[all]
+```
+
+### Install from source
+```bash
+git clone https://github.com/memorybank/memorybank-python
+cd memorybank-python
+pip install -e .
 
 ## Features
 
@@ -13,18 +44,66 @@ A MemoryBank-inspired external long-term memory system for conversational AI age
 
 ## Quick Start
 
-1. **Install Dependencies**
-```bash
-pip install -r requirements.txt
+### Using the Python SDK
+
+```python
+from memorybank import MemoryBankClient, MemoryBankConfig, MemoryMetadata
+
+# Configure the client
+config = MemoryBankConfig(
+    api_key="your-api-key",
+    base_url="http://localhost:8000"
+)
+
+# Create client and store a memory
+with MemoryBankClient(config) as client:
+    # Store a memory
+    memory_id = client.store_memory(
+        "User prefers dark mode for all applications",
+        metadata=MemoryMetadata(user_id="user123", category="preference")
+    )
+    
+    # Retrieve relevant memories
+    memories = client.retrieve_memories("What UI preferences does the user have?")
+    
+    # Chat with memory-augmented LLM
+    response = client.chat("Help me set up my development environment")
+    print(response.response)
 ```
 
-2. **Set Up Environment**
+### Using the CLI
+
+```bash
+# Configure the CLI
+memorybank configure --api-key your-key --base-url http://localhost:8000
+
+# Store memories
+memorybank store "User loves Python programming" --user-id user123 --category preference
+
+# Retrieve memories
+memorybank retrieve "What does the user like?" --user-id user123
+
+# Chat with memory
+memorybank chat "What programming languages should I learn?" --user-id user123
+
+# Get statistics
+memorybank stats
+```
+
+### Running the Server
+
+1. **Install server dependencies**
+```bash
+pip install memorybank[server]
+```
+
+2. **Set up environment**
 ```bash
 cp .env.example .env
 # Edit .env with your API keys
 ```
 
-3. **Run the Server**
+3. **Run the server**
 ```bash
 python main.py
 ```
