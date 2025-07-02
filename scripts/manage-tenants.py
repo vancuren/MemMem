@@ -75,7 +75,11 @@ class TenantManager:
         try:
             result = subprocess.run([
                 str(script_path), tenant_id, api_key, domain
-            ], capture_output=True, text=True, check=True)
+            ], capture_output=True, text=True)
+            
+            # Check if deployment actually failed (non-zero exit code)
+            if result.returncode != 0:
+                raise RuntimeError(f"Deployment failed with exit code {result.returncode}: {result.stderr}")
             
             # Parse deployment info
             deployment_info_path = self.deployments_dir / tenant_id / "deployment-info.json"
@@ -103,8 +107,8 @@ class TenantManager:
                 "created_at": datetime.now().isoformat()
             }
             
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Deployment failed: {e.stderr}")
+        except Exception as e:
+            raise RuntimeError(f"Deployment failed: {str(e)}")
     
     def get_tenant(self, tenant_id: str) -> Optional[Dict]:
         """Get tenant information"""
